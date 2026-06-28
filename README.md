@@ -1,22 +1,20 @@
 # KAL NET - Version 1 Firebase
 
-Application simple de gestion des listings et chantiers.
+Fichiers à déposer dans GitHub Pages :
+- index.html
+- style.css
+- app.js
+- firebase.js
 
-## Contenu
-- `index.html`
-- `style.css`
-- `app.js`
-- `firebase.js`
+Fonctions :
+- Chantiers synchronisés Firebase
+- Agents synchronisés Firebase
+- Ajouter / modifier / supprimer agent
+- Ajouter / modifier / supprimer chantier
+- Import Excel / CSV
+- Export CSV
 
-## Installation GitHub Pages
-1. Envoyez ces 4 fichiers dans votre dépôt GitHub.
-2. Activez GitHub Pages : Settings > Pages > Deploy from branch > main / root.
-3. Ouvrez le lien GitHub Pages.
-4. À la première ouverture, cliquez sur **Charger la liste initiale** si votre base Firebase est vide.
-
-## Important Firebase
-Firestore doit être activé. Pour les tests, règles temporaires :
-
+Règles Firestore de test :
 ```
 rules_version = '2';
 service cloud.firestore {
@@ -27,5 +25,3 @@ service cloud.firestore {
   }
 }
 ```
-
-À sécuriser ensuite avec des comptes utilisateurs.
