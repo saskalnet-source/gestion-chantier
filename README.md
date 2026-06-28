@@ -1,20 +1,19 @@
-# KAL NET - Version 1 Firebase
+# KAL NET V1 - Firebase
 
-Fichiers à déposer dans GitHub Pages :
-- index.html
-- style.css
-- app.js
-- firebase.js
-
-Fonctions :
-- Chantiers synchronisés Firebase
-- Agents synchronisés Firebase
-- Ajouter / modifier / supprimer agent
-- Ajouter / modifier / supprimer chantier
+Application simple de gestion des chantiers avec :
+- Firebase Firestore
+- Gestion des agents + téléphone
+- Chantiers avec Poubelle / Ménage / Gardiennage
 - Import Excel / CSV
 - Export CSV
+- Synchronisation entre téléphones
 
-Règles Firestore de test :
+## Installation GitHub
+Déposez tout le contenu du dossier dans votre dépôt GitHub, puis activez GitHub Pages.
+
+## Firebase
+Dans Firebase > Firestore Database > Règles, pour les tests seulement :
+
 ```
 rules_version = '2';
 service cloud.firestore {
@@ -25,3 +24,5 @@ service cloud.firestore {
   }
 }
 ```
+
+Collections utilisées : `agents` et `chantiers`.
