@@ -1,8 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, getDocs, writeBatch, enableIndexedDbPersistence
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCl7wK44p4vlG2hvLXr6PLrksnB6bxnQbk",
@@ -16,6 +13,5 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-try { await enableIndexedDbPersistence(db); } catch(e) { console.warn('Persistence Firebase non activée', e?.code || e); }
 
-export { collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, getDocs, writeBatch };
+enableIndexedDbPersistence(db).catch(() => {});

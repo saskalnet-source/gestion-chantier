@@ -3,88 +3,77 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KAL NET - Gestion chantiers</title>
+  <title>KAL NET - Gestion des chantiers</title>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
- <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <h1>KAL NET - Gestion des chantiers</h1>
-    <div class="sub">Recherche, import Excel/CSV, attribution Poubelle / Ménage / Gardiennage et numéros agents synchronisés avec Firebase.</div>
-    <div class="dashboard">
-      <div class="kpi"><b id="kTotal">0</b>Total chantiers</div>
-      <div class="kpi"><b id="kVisible">0</b>Résultats affichés</div>
-      <div class="kpi"><b id="kClients">0</b>Clients</div>
-      <div class="kpi"><b id="kAgents">0</b>Agents</div>
-    </div>
-  </div>
-</header>
-
-<main class="wrap">
-  <section class="card">
-    <div class="toolbar">
-      <div><label>Barre de recherche</label><input id="search" placeholder="Adresse, ville, agent, client, téléphone..."></div>
-      <div><label>Client</label><select id="clientFilter"><option value="">Tous</option></select></div>
-      <div><label>Agent</label><select id="agentFilter"><option value="">Tous</option></select></div>
-      <div><label>Prestation</label><select id="serviceFilter"><option value="">Toutes</option><option value="poubelle">Poubelle</option><option value="menage">Ménage</option><option value="gardiennage">Gardiennage</option></select></div>
-      <div class="actions">
-        <button id="addBtn">+ Ajouter chantier</button>
-        <button class="ok" id="importBtn">Importer Excel/CSV</button>
-        <input id="importFile" type="file" accept=".xlsx,.xls,.csv,.txt" style="display:none">
-        <button class="secondary" id="exportBtn">Exporter CSV</button>
+  <header class="topbar">
+    <div class="wrap">
+      <h1>KAL NET - Gestion des chantiers</h1>
+      <p>Recherche, import Excel/CSV, attribution Poubelle / Ménage / Gardiennage et numéros agents synchronisés avec Firebase.</p>
+      <div class="stats">
+        <div><b id="kTotal">0</b><span>Total chantiers</span></div>
+        <div><b id="kVisible">0</b><span>Résultats affichés</span></div>
+        <div><b id="kClients">0</b><span>Clients</span></div>
+        <div><b id="kAgents">0</b><span>Agents</span></div>
       </div>
     </div>
-  </section>
+  </header>
 
-  <section class="card">
-    <div class="actions header-line">
-      <strong>Gestion des agents</strong>
-      <span class="small">Ajoutez un agent avec son téléphone. Les numéros s'affichent automatiquement dans les chantiers.</span>
-    </div>
-    <div class="grid-form agent-form">
-      <div class="wide"><label>Nom de l'agent</label><input id="agentName" placeholder="Ex: DEMBA DOUCOURÉ"></div>
-      <div class="wide"><label>Téléphone</label><input id="agentPhone" placeholder="Ex: 06 12 34 56 78"></div>
-      <div class="form-button"><button class="ok" id="saveAgentBtn">Enregistrer agent</button></div>
-    </div>
-    <div id="agentList" class="agent-list"></div>
-  </section>
+  <main class="wrap">
+    <section class="card toolbar">
+      <label>Recherche<input id="search" placeholder="Adresse, ville, agent, client, téléphone..."></label>
+      <label>Client<select id="clientFilter"><option value="">Tous</option></select></label>
+      <label>Agent<select id="agentFilter"><option value="">Tous</option></select></label>
+      <label>Prestation<select id="serviceFilter"><option value="">Toutes</option><option value="poubelle">Poubelle</option><option value="menage">Ménage</option><option value="gardiennage">Gardiennage</option></select></label>
+      <div class="buttons">
+        <button id="addBtn">+ Ajouter chantier</button>
+        <button id="importBtn" class="ok">Importer Excel/CSV</button>
+        <input id="importFile" type="file" accept=".xlsx,.xls,.csv,.txt" hidden>
+        <button id="exportBtn" class="secondary">Exporter CSV</button>
+        <button id="seedBtn" class="secondary">Charger liste départ</button>
+      </div>
+    </section>
 
-  <section class="card">
-    <div class="actions header-line">
-      <strong>Liste des chantiers</strong>
-      <span class="small" id="syncStatus">Connexion Firebase...</span>
-    </div>
-    <div class="table-box">
-      <table>
-        <thead>
-          <tr>
-            <th>Chantier / Adresse</th><th>CP / Ville</th><th>Poubelle</th><th>Ménage</th><th>Gardiennage</th><th>Téléphones agents</th><th>Client</th><th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-  </section>
-</main>
+    <section class="card">
+      <div class="section-title"><strong>Gestion des agents</strong><span>Ajoutez un agent avec son téléphone. Les numéros s'affichent automatiquement dans les chantiers.</span></div>
+      <div class="agent-form">
+        <label>Nom de l'agent<input id="agentName" placeholder="Ex : DEMBA DOUCOURÉ"></label>
+        <label>Téléphone<input id="agentPhone" placeholder="Ex : 06 12 34 56 78"></label>
+        <button id="saveAgentBtn" class="ok">Enregistrer agent</button>
+      </div>
+      <div id="agentList" class="agent-list"></div>
+    </section>
 
-<div class="modal" id="modal">
-  <div class="modal-card">
-    <h2 id="modalTitle">Ajouter un chantier</h2>
-    <input type="hidden" id="editId">
-    <div class="grid-form">
-      <div class="wide"><label>Chantier / adresse</label><input id="fChantier" required></div>
-      <div><label>CP / ville</label><input id="fCp"></div>
-      <div><label>Poubelle</label><select id="fPoubelle"><option value="">Aucun</option></select></div>
-      <div><label>Ménage</label><select id="fMenage"><option value="">Aucun</option></select></div>
-      <div><label>Gardiennage</label><select id="fGardiennage"><option value="">Aucun</option></select></div>
-      <div><label>Client</label><input id="fClient" placeholder="ex: HNET"></div>
+    <section class="card">
+      <div class="section-title"><strong>Liste des chantiers</strong><span id="syncStatus">Connexion Firebase...</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Chantier / Adresse</th><th>CP / Ville</th><th>Poubelle</th><th>Ménage</th><th>Gardiennage</th><th>Téléphones agents</th><th>Client</th><th>Action</th></tr></thead>
+          <tbody id="tbody"><tr><td colspan="8">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="modal">
+    <div class="modal-box">
+      <h2 id="modalTitle">Ajouter un chantier</h2>
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <label class="wide">Chantier / adresse<input id="fAdresse" required></label>
+        <label>CP / ville<input id="fCp"></label>
+        <label>Poubelle<select id="fPoubelle"><option value="">Aucun</option></select></label>
+        <label>Ménage<select id="fMenage"><option value="">Aucun</option></select></label>
+        <label>Gardiennage<select id="fGardiennage"><option value="">Aucun</option></select></label>
+        <label>Client<input id="fClient" placeholder="ex : HNET"></label>
+      </div>
+      <div class="modal-actions"><button id="cancelBtn" class="secondary">Annuler</button><button id="saveBtn" class="ok">Enregistrer</button></div>
     </div>
-    <div class="actions modal-actions"><button class="secondary" id="cancelBtn">Annuler</button><button class="ok" id="saveBtn">Enregistrer</button></div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
-<script type="module" src="app.js"></script>
+  <div id="toast" class="toast"></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
