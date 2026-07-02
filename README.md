@@ -1,24 +1,19 @@
-# KAL NET V1 - Firebase
+# KAL NET - Gestion chantiers simple
 
-Fichiers à déposer à la racine du dépôt GitHub Pages :
+Fonctions :
+- Liste des chantiers avec adresse
+- Agent affecté pour Poubelle / Ménage / Gardiennage
+- Contact téléphone de chaque agent
+- Ajouter / modifier / supprimer agents
+- Ajouter / modifier / supprimer chantiers
+- Import Excel / CSV
+- Export CSV
+- Synchronisation Firebase Firestore
 
+Déposez tous les fichiers à la racine du dépôt GitHub Pages :
 - index.html
 - style.css
 - app.js
 - firebase.js
 - initialData.js
-
-Firebase Firestore doit être en mode test pour commencer :
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}
-```
-
-Collections utilisées : `agents` et `chantiers`.
+- README.md

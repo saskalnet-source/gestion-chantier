@@ -3,77 +3,89 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KAL NET - Gestion des chantiers</title>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <title>KAL NET - Gestion chantiers</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
+  <header>
     <div class="wrap">
       <h1>KAL NET - Gestion des chantiers</h1>
-      <p>Recherche, import Excel/CSV, attribution Poubelle / Ménage / Gardiennage et numéros agents synchronisés avec Firebase.</p>
+      <p>Liste des chantiers, agents affectés et contacts agents synchronisés avec Firebase.</p>
       <div class="stats">
-        <div><b id="kTotal">0</b><span>Total chantiers</span></div>
-        <div><b id="kVisible">0</b><span>Résultats affichés</span></div>
-        <div><b id="kClients">0</b><span>Clients</span></div>
+        <div><b id="kChantiers">0</b><span>Chantiers</span></div>
         <div><b id="kAgents">0</b><span>Agents</span></div>
+        <div><b id="kVisible">0</b><span>Affichés</span></div>
       </div>
     </div>
   </header>
 
   <main class="wrap">
     <section class="card toolbar">
-      <label>Recherche<input id="search" placeholder="Adresse, ville, agent, client, téléphone..."></label>
-      <label>Client<select id="clientFilter"><option value="">Tous</option></select></label>
-      <label>Agent<select id="agentFilter"><option value="">Tous</option></select></label>
-      <label>Prestation<select id="serviceFilter"><option value="">Toutes</option><option value="poubelle">Poubelle</option><option value="menage">Ménage</option><option value="gardiennage">Gardiennage</option></select></label>
+      <div class="field grow">
+        <label>Recherche</label>
+        <input id="search" placeholder="Adresse, ville, client, agent, téléphone...">
+      </div>
+      <div class="field">
+        <label>Agent</label>
+        <select id="agentFilter"><option value="">Tous</option></select>
+      </div>
+      <div class="field">
+        <label>Client</label>
+        <select id="clientFilter"><option value="">Tous</option></select>
+      </div>
       <div class="buttons">
-        <button id="addBtn">+ Ajouter chantier</button>
+        <button id="newChantierBtn">+ Chantier</button>
         <button id="importBtn" class="ok">Importer Excel/CSV</button>
         <input id="importFile" type="file" accept=".xlsx,.xls,.csv,.txt" hidden>
         <button id="exportBtn" class="secondary">Exporter CSV</button>
-        <button id="seedBtn" class="secondary">Charger liste départ</button>
       </div>
     </section>
 
     <section class="card">
-      <div class="section-title"><strong>Gestion des agents</strong><span>Ajoutez un agent avec son téléphone. Les numéros s'affichent automatiquement dans les chantiers.</span></div>
-      <div class="agent-form">
-        <label>Nom de l'agent<input id="agentName" placeholder="Ex : DEMBA DOUCOURÉ"></label>
-        <label>Téléphone<input id="agentPhone" placeholder="Ex : 06 12 34 56 78"></label>
-        <button id="saveAgentBtn" class="ok">Enregistrer agent</button>
+      <div class="head-line">
+        <h2>Agents</h2>
+        <span>Ajoutez/modifiez le contact de l'agent. Le numéro s'affiche automatiquement dans les chantiers.</span>
       </div>
+      <form id="agentForm" class="agent-form">
+        <input type="hidden" id="agentId">
+        <div class="field"><label>Nom de l'agent</label><input id="agentName" placeholder="Ex: DEMBA DOUCOURÉ" required></div>
+        <div class="field"><label>Téléphone</label><input id="agentPhone" placeholder="Ex: 06 12 34 56 78"></div>
+        <button class="ok" type="submit">Enregistrer agent</button>
+        <button class="secondary" type="button" id="clearAgentBtn">Nouveau</button>
+      </form>
       <div id="agentList" class="agent-list"></div>
     </section>
 
     <section class="card">
-      <div class="section-title"><strong>Liste des chantiers</strong><span id="syncStatus">Connexion Firebase...</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Chantier / Adresse</th><th>CP / Ville</th><th>Poubelle</th><th>Ménage</th><th>Gardiennage</th><th>Téléphones agents</th><th>Client</th><th>Action</th></tr></thead>
-          <tbody id="tbody"><tr><td colspan="8">Chargement...</td></tr></tbody>
-        </table>
+      <div class="head-line">
+        <h2>Liste des chantiers</h2>
+        <span id="syncStatus">Connexion Firebase...</span>
       </div>
+      <div id="chantierList" class="chantier-list"></div>
     </section>
   </main>
 
-  <div class="modal" id="modal">
-    <div class="modal-box">
-      <h2 id="modalTitle">Ajouter un chantier</h2>
-      <input type="hidden" id="editId">
-      <div class="form-grid">
-        <label class="wide">Chantier / adresse<input id="fAdresse" required></label>
-        <label>CP / ville<input id="fCp"></label>
-        <label>Poubelle<select id="fPoubelle"><option value="">Aucun</option></select></label>
-        <label>Ménage<select id="fMenage"><option value="">Aucun</option></select></label>
-        <label>Gardiennage<select id="fGardiennage"><option value="">Aucun</option></select></label>
-        <label>Client<input id="fClient" placeholder="ex : HNET"></label>
+  <dialog id="chantierDialog">
+    <form id="chantierForm" method="dialog">
+      <h2 id="dialogTitle">Ajouter un chantier</h2>
+      <input type="hidden" id="chantierId">
+      <div class="grid">
+        <div class="field wide"><label>Adresse du chantier</label><input id="adresse" required></div>
+        <div class="field"><label>CP / Ville</label><input id="ville"></div>
+        <div class="field"><label>Client</label><input id="client" placeholder="Ex: HNET"></div>
+        <div class="field"><label>Agent poubelle</label><select id="poubelle"></select></div>
+        <div class="field"><label>Agent ménage</label><select id="menage"></select></div>
+        <div class="field"><label>Agent gardiennage</label><select id="gardiennage"></select></div>
       </div>
-      <div class="modal-actions"><button id="cancelBtn" class="secondary">Annuler</button><button id="saveBtn" class="ok">Enregistrer</button></div>
-    </div>
-  </div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" id="cancelChantierBtn">Annuler</button>
+        <button type="submit" class="ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast"></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>
