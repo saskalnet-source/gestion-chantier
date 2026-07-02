@@ -21,9 +21,9 @@ function agentKey(v){return norm(v).replace(/\s+/g,' ');}
 function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
 function isHeaderValue(v){return PRESTATION_LABELS.includes(norm(v)) || ['adresse','adresses','chantier','chantiers','cp','ville','client','nom du client'].includes(norm(v));}
-function addressOf(c){return clean(c.adresse || c.chantier || c.adress || c.address || c.nom || '');}
-function villeOf(c){return clean(c.ville || c.cp || c.codePostal || c.code_postal || '');}
-function clientOf(c){return clean(c.client || c.source || '');}
+function addressOf(c){return clean(c.adresse || c.Adresse || c.ADRESSE || c.chantier || c.Chantier || c.CHANTIER || c['Adresse du chantier'] || c['adresse du chantier'] || c.adress || c.address || c.nom || '');}
+function villeOf(c){return clean(c.ville || c.Ville || c.VILLE || c.cp || c.CP || c.codePostal || c.code_postal || '');}
+function clientOf(c){return clean(c.client || c.Client || c.CLIENT || c.source || c.Source || '');}
 function prestationOf(c,k){return isHeaderValue(c[k]) ? '' : clean(c[k]);}
 function agentByName(name){const k=agentKey(name);return agents.find(a=>agentKey(a.nom)===k);}
 function chantierAgents(c){return ['poubelle','menage','gardiennage'].map(k=>prestationOf(c,k)).filter(Boolean);}
@@ -85,12 +85,37 @@ function renderChantiers(){
 }
 function render(){renderFilters();renderAgentSelects();renderAgents();renderChantiers();}
 
+
+async function resetChantiersAvecAdressesInitiales(){
+  if(!confirm('Cette action va remplacer la liste des chantiers dans Firebase par la liste initiale avec les vraies adresses. Continuer ?')) return;
+  const snap = await getDocs(refs.chantiers);
+  let batch = writeBatch(db);
+  let count = 0;
+  snap.docs.forEach(d=>{ batch.delete(doc(refs.chantiers,d.id)); count++; if(count%400===0){ /* limite batch Firebase */ } });
+  // Si beaucoup de docs, on fait simple par paquets
+  if(count > 0) await batch.commit();
+  batch = writeBatch(db);
+  initialChantiers.forEach((c,i)=>{
+    batch.set(doc(refs.chantiers, String(c.id || i+1)), {
+      adresse: addressOf(c),
+      ville: villeOf(c),
+      client: clientOf(c),
+      poubelle: prestationOf(c,'poubelle'),
+      menage: prestationOf(c,'menage'),
+      gardiennage: prestationOf(c,'gardiennage'),
+      createdAt: serverTimestamp()
+    });
+  });
+  await batch.commit();
+  toast('Adresses des chantiers réimportées');
+}
+
 async function seedIfEmpty(){
   const [agSnap,chSnap]=await Promise.all([getDocs(refs.agents),getDocs(refs.chantiers)]);
   if(!agSnap.empty || !chSnap.empty) return;
   const batch=writeBatch(db);
   initialAgents.forEach(a=>batch.set(doc(refs.agents), {nom:a.nom, telephone:a.telephone||'', createdAt:serverTimestamp()}));
-  initialChantiers.forEach(c=>batch.set(doc(refs.chantiers), {adresse:addressOf(c), ville:villeOf(c), client:clientOf(c), poubelle:prestationOf(c,'poubelle'), menage:prestationOf(c,'menage'), gardiennage:prestationOf(c,'gardiennage'), createdAt:serverTimestamp()}));
+  initialChantiers.forEach((c,i)=>batch.set(doc(refs.chantiers, String(c.id || i+1)), {adresse:addressOf(c), ville:villeOf(c), client:clientOf(c), poubelle:prestationOf(c,'poubelle'), menage:prestationOf(c,'menage'), gardiennage:prestationOf(c,'gardiennage'), createdAt:serverTimestamp()}));
   await batch.commit(); toast('Adresses initiales importées');
 }
 
@@ -119,7 +144,7 @@ $('chantierList').addEventListener('click', async e=>{const edit=e.target.datase
 $('importBtn').onclick=()=>$('importFile').click();
 $('importFile').addEventListener('change', async e=>{
   const file=e.target.files[0]; if(!file)return; const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'}); const imported=[]; const foundAgents=new Set();
-  wb.SheetNames.forEach(sheetName=>{const ws=wb.Sheets[sheetName]; const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}); const headerIndex=rows.findIndex(r=>r.some(v=>['adresse','adresses','chantier','chantiers'].includes(norm(v)))); if(headerIndex<0)return; const headers=rows[headerIndex].map(norm); const find=(names)=>headers.findIndex(h=>names.some(n=>h.includes(n))); const cAdresse=find(['adresse','chantier']); const cVille=find(['cp','ville']); const cPoub=find(['poubelle']); const cMen=find(['menage','ménage']); const cGard=find(['gardien']); const cClient=find(['client']); rows.slice(headerIndex+1).forEach(r=>{const val=i=>i>=0?clean(r[i]):''; const adresse=val(cAdresse); if(!adresse || isHeaderValue(adresse))return; const item={adresse, ville:val(cVille), client:val(cClient)||sheetName, poubelle:val(cPoub), menage:val(cMen), gardiennage:val(cGard)}; ['poubelle','menage','gardiennage'].forEach(k=>{if(item[k] && !isHeaderValue(item[k])) foundAgents.add(item[k].toUpperCase()); else if(isHeaderValue(item[k])) item[k]='';}); imported.push(item);});});
+  wb.SheetNames.forEach(sheetName=>{const ws=wb.Sheets[sheetName]; const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}); let headerIndex=rows.findIndex(r=>r.some(v=>['adresse','adresses','chantier','chantiers'].includes(norm(v)))); if(headerIndex<0) headerIndex=0; const headers=rows[headerIndex].map(norm); const find=(names)=>headers.findIndex(h=>names.some(n=>h.includes(n))); let cAdresse=find(['adresse','chantier']); if(cAdresse<0) cAdresse=0; const cVille=find(['cp','ville']); const cPoub=find(['poubelle']); const cMen=find(['menage','ménage']); const cGard=find(['gardien']); const cClient=find(['client']); rows.slice(headerIndex+1).forEach(r=>{const val=i=>i>=0?clean(r[i]):''; const adresse=val(cAdresse); if(!adresse || isHeaderValue(adresse))return; const item={adresse, ville:val(cVille), client:val(cClient)||sheetName, poubelle:val(cPoub), menage:val(cMen), gardiennage:val(cGard)}; ['poubelle','menage','gardiennage'].forEach(k=>{if(item[k] && !isHeaderValue(item[k])) foundAgents.add(item[k].toUpperCase()); else if(isHeaderValue(item[k])) item[k]='';}); imported.push(item);});});
   if(!imported.length) return alert('Aucun chantier trouvé dans ce fichier. Vérifiez la colonne Adresse.');
   if(!confirm(`Importer ${imported.length} chantier(s) ?`)) return;
   const batch=writeBatch(db); const existingKeys=new Map(chantiers.map(c=>[norm(clientOf(c)+'|'+addressOf(c)),c]));
@@ -127,4 +152,29 @@ $('importFile').addEventListener('change', async e=>{
   foundAgents.forEach(n=>{if(!agents.some(a=>agentKey(a.nom)===agentKey(n))) batch.set(doc(refs.agents), {nom:n, telephone:'', createdAt:serverTimestamp()});});
   await batch.commit(); e.target.value=''; toast('Import terminé');
 });
+$('resetChantiersBtn').onclick=()=>resetChantiersAvecAdressesInitiales().catch(e=>{console.error(e); alert('Erreur réimport adresses : '+e.message);});
+
 $('exportBtn').onclick=()=>{const rows=[['Client','Adresse','Ville','Poubelle','Ménage','Gardiennage'],...chantiers.map(c=>[clientOf(c),addressOf(c),villeOf(c),prestationOf(c,'poubelle'),prestationOf(c,'menage'),prestationOf(c,'gardiennage')])]; const csv=rows.map(r=>r.map(v=>`"${String(v||'').replaceAll('"','""')}"`).join(';')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='kalnet_chantiers.csv'; a.click(); URL.revokeObjectURL(url);};
+
+
+async function resetInitialAdresses(){
+  if(!confirm('Cette action va remplacer la liste actuelle des chantiers par les adresses initiales. Les agents et téléphones seront conservés. Continuer ?')) return;
+  $('syncStatus').textContent='Réimport des adresses en cours...';
+  const current = await getDocs(refs.chantiers);
+  let batch = writeBatch(db);
+  let count = 0;
+  current.docs.forEach(d=>{ batch.delete(doc(refs.chantiers,d.id)); count++; if(count>=450){ /* Firestore max 500 writes, but not reached here normalement */ } });
+  await batch.commit();
+  const batch2 = writeBatch(db);
+  const newAgents = new Set();
+  initialChantiers.forEach(c=>{
+    const row = {adresse:addressOf(c), ville:villeOf(c), client:clientOf(c), poubelle:prestationOf(c,'poubelle'), menage:prestationOf(c,'menage'), gardiennage:prestationOf(c,'gardiennage'), createdAt:serverTimestamp()};
+    ['poubelle','menage','gardiennage'].forEach(k=>{ if(row[k]) newAgents.add(row[k].toUpperCase()); });
+    batch2.set(doc(refs.chantiers, 'initial_'+(c.id||Math.random().toString(36).slice(2))), row);
+  });
+  newAgents.forEach(n=>{ if(!agents.some(a=>agentKey(a.nom)===agentKey(n))) batch2.set(doc(refs.agents), {nom:n, telephone:'', createdAt:serverTimestamp()}); });
+  await batch2.commit();
+  toast('Adresses réimportées');
+}
+const resetBtn = $('resetInitialBtn');
+if(resetBtn) resetBtn.onclick = resetInitialAdresses;
