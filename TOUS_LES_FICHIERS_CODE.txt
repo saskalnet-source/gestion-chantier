@@ -1,3 +1,154 @@
+
+
+============================== index.html ==============================
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KAL NET - Recherche chantiers</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>KAL NET</h1>
+      <p>Recherche chantier / agent avec téléphone direct</p>
+    </div>
+    <button id="manageAgentsBtn" class="btn secondary">Agents</button>
+  </header>
+
+  <main class="container">
+    <section class="search-card">
+      <label for="searchInput">Recherche</label>
+      <input id="searchInput" type="search" placeholder="Tapez une adresse, un client ou un agent..." autocomplete="off">
+      <p id="status" class="status">Chargement Firebase...</p>
+      <div class="actions center">
+        <button id="addChantierBtn" class="btn">+ Ajouter un chantier</button>
+        <button id="importBtn" class="btn secondary">Importer Excel/CSV</button>
+        <button id="exportBtn" class="btn secondary">Exporter CSV</button>
+        <button id="seedBtn" class="btn warning">Réparer / réimporter les adresses</button>
+        <input id="importFile" type="file" accept=".xlsx,.xls,.csv,.txt" hidden>
+      </div>
+    </section>
+
+    <section id="emptyHelp" class="help-card">
+      <h2>Commencez par une recherche</h2>
+      <p>Les chantiers ne s'affichent pas tous. Tapez une adresse, un client ou un agent pour voir les résultats.</p>
+    </section>
+
+    <section id="results" class="results"></section>
+  </main>
+
+  <dialog id="chantierDialog" class="dialog">
+    <form method="dialog" id="chantierForm">
+      <h2 id="chantierDialogTitle">Ajouter un chantier</h2>
+      <input type="hidden" id="chantierId">
+      <div class="grid">
+        <label>Adresse du chantier
+          <input id="adresse" required placeholder="Ex : 92 avenue de la République">
+        </label>
+        <label>CP / Ville
+          <input id="cp" placeholder="Ex : 75017 ou Vincennes">
+        </label>
+        <label>Client
+          <input id="client" placeholder="Ex : HNET">
+        </label>
+        <label>Poubelle
+          <select id="poubelle"></select>
+        </label>
+        <label>Ménage
+          <select id="menage"></select>
+        </label>
+        <label>Gardiennage
+          <select id="gardiennage"></select>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn secondary" type="button" id="cancelChantierBtn">Annuler</button>
+        <button class="btn" type="submit">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="agentsDialog" class="dialog wide">
+    <div>
+      <h2>Gestion des agents</h2>
+      <form id="agentForm" class="agent-form">
+        <input type="hidden" id="agentId">
+        <label>Nom de l'agent
+          <input id="agentName" required placeholder="Ex : DEMBA DOUCOURÉ">
+        </label>
+        <label>Téléphone
+          <input id="agentPhone" placeholder="Ex : 06 12 34 56 78">
+        </label>
+        <button class="btn" type="submit">Enregistrer agent</button>
+      </form>
+      <div id="agentsList" class="agents-list"></div>
+      <div class="dialog-actions">
+        <button class="btn secondary" id="closeAgentsBtn">Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
+
+============================== style.css ==============================
+:root{--bg:#f4f7fb;--card:#fff;--txt:#172033;--muted:#667085;--line:#e5e7eb;--primary:#2563eb;--primary2:#1d4ed8;--danger:#dc2626;--ok:#16a34a;--warn:#f59e0b}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:Arial,Helvetica,sans-serif}.topbar{background:linear-gradient(135deg,#0f172a,#1d4ed8);color:white;padding:22px;display:flex;justify-content:space-between;gap:15px;align-items:center}.topbar h1{margin:0;font-size:28px}.topbar p{margin:4px 0 0;opacity:.9}.container{max-width:1050px;margin:0 auto;padding:18px}.search-card,.help-card,.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(15,23,42,.07);margin-bottom:16px}.search-card label{display:block;font-weight:bold;margin-bottom:8px}input,select{width:100%;padding:13px;border:1px solid #cfd4dc;border-radius:12px;font-size:16px;background:white}.search-card input{font-size:20px;padding:16px}.status{color:var(--muted);margin:12px 0}.actions{display:flex;gap:10px;flex-wrap:wrap}.center{justify-content:center}.btn{border:0;border-radius:12px;padding:12px 15px;font-weight:bold;cursor:pointer;background:var(--primary);color:white}.btn:hover{background:var(--primary2)}.btn.secondary{background:#eef2ff;color:#1e40af}.btn.danger{background:#fee2e2;color:#991b1b}.btn.warning{background:#fff7ed;color:#9a3412}.results{display:grid;gap:14px}.chantier-card{background:white;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 4px 14px rgba(15,23,42,.06)}.chantier-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.chantier-title{font-size:18px;font-weight:bold;margin:0 0 4px}.muted{color:var(--muted);font-size:14px}.badge{display:inline-block;background:#eef2ff;color:#1e40af;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:bold}.prestations{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.presta{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fafafa}.presta h3{font-size:14px;margin:0 0 6px}.agent-name{font-weight:bold}.call{display:inline-block;margin-top:8px;text-decoration:none;color:white;background:var(--ok);padding:8px 10px;border-radius:10px;font-weight:bold}.no-phone{color:var(--muted);font-size:13px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.dialog{border:0;border-radius:18px;padding:0;max-width:720px;width:95vw}.dialog.wide{max-width:900px}.dialog::backdrop{background:rgba(15,23,42,.5)}.dialog>form,.dialog>div{padding:18px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid label,.agent-form label{font-weight:bold;font-size:13px;color:var(--muted)}.grid input,.grid select,.agent-form input{margin-top:6px}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}.agent-form{display:grid;grid-template-columns:1.2fr 1fr auto;gap:10px;align-items:end}.agents-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.agent-pill{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fafafa}.agent-pill strong{display:block}.hidden{display:none}@media(max-width:800px){.topbar{align-items:flex-start;flex-direction:column}.prestations,.grid,.agent-form,.agents-list{grid-template-columns:1fr}.chantier-head{flex-direction:column}.search-card input{font-size:17px}.btn{width:100%}.actions .btn{width:auto}.center .btn{width:100%}}
+
+============================== firebase.js ==============================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+  onSnapshot,
+  serverTimestamp,
+  enableIndexedDbPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCl7wK44p4vlG2hvLXr6PLrksnB6bxnQbk",
+  authDomain: "gestion-chantier-b5e11.firebaseapp.com",
+  projectId: "gestion-chantier-b5e11",
+  storageBucket: "gestion-chantier-b5e11.firebasestorage.app",
+  messagingSenderId: "390756939710",
+  appId: "1:390756939710:web:aaa7b1ec6f58d0335aabef",
+  measurementId: "G-ZFGK7WP9M7"
+};
+
+export const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+
+enableIndexedDbPersistence(db).catch(() => {
+  // Si plusieurs onglets sont ouverts, Firebase désactive juste le mode hors connexion.
+});
+
+export {
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+  onSnapshot,
+  serverTimestamp
+};
+
+
+============================== initialData.js ==============================
 export const initialChantiers = [
   {
     "id": 1,
@@ -1880,3 +2031,232 @@ export const initialChantiers = [
     "source": "TIB NET"
   }
 ];
+
+
+============================== app.js ==============================
+import { db, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch, onSnapshot, serverTimestamp } from './firebase.js';
+import { initialChantiers } from './initialData.js';
+
+const $ = (id) => document.getElementById(id);
+const chantiersCol = collection(db, 'chantiers');
+const agentsCol = collection(db, 'agents');
+let chantiers = [];
+let agents = [];
+let readyChantiers = false;
+let readyAgents = false;
+const SERVICE_WORDS = new Set(['poubelle','poubelles','menage','ménage','gardiennage','gardien','agent','']);
+
+function norm(v){return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim()}
+function clean(v){return String(v||'').trim()}
+function html(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function phoneHref(p){return String(p||'').replace(/[^0-9+]/g,'')}
+function agentByName(name){const n=norm(name);return agents.find(a=>norm(a.nom)===n)}
+function isRealAgentName(name){const n=norm(name); return n && !SERVICE_WORDS.has(n) && n.length > 1}
+function chantierKey(c){return norm((c.client||'')+'|'+(c.adresse||c.chantier||''))}
+function setStatus(){
+  const total = chantiers.length;
+  $('status').textContent = (readyChantiers && readyAgents) ? `${total} chantier(s) - ${agents.length} agent(s) synchronisés Firebase` : 'Chargement Firebase...';
+}
+
+onSnapshot(agentsCol, (snap)=>{agents=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.nom||'').localeCompare(String(b.nom||''),'fr'));readyAgents=true;fillAgentSelects();renderAgents();render();setStatus();}, err=>{$('status').textContent='Erreur Firebase agents : '+err.message});
+onSnapshot(chantiersCol, (snap)=>{chantiers=snap.docs.map(d=>({id:d.id,...d.data()}));readyChantiers=true;render();setStatus();}, err=>{$('status').textContent='Erreur Firebase chantiers : '+err.message});
+
+function agentOptions(selected=''){
+  const opts = ['<option value="">-- Aucun --</option>'];
+  for(const a of agents){
+    const nom = a.nom || '';
+    opts.push(`<option value="${html(nom)}" ${norm(nom)===norm(selected)?'selected':''}>${html(nom)}</option>`);
+  }
+  return opts.join('');
+}
+function fillAgentSelects(){
+  for(const id of ['poubelle','menage','gardiennage']){
+    const current=$(id).value;
+    $(id).innerHTML=agentOptions(current);
+  }
+}
+function prestationHtml(label, agentName){
+  if(!agentName) return `<div class="presta"><h3>${label}</h3><span class="no-phone">Aucun agent</span></div>`;
+  const a = agentByName(agentName);
+  const phone = a?.telephone || '';
+  return `<div class="presta"><h3>${label}</h3><div class="agent-name">${html(agentName)}</div>${phone?`<a class="call" href="tel:${phoneHref(phone)}">📞 ${html(phone)}</a>`:'<div class="no-phone">Numéro non renseigné</div>'}</div>`;
+}
+function render(){
+  const q = norm($('searchInput').value);
+  const help=$('emptyHelp'), results=$('results');
+  if(q.length < 2){help.classList.remove('hidden');results.innerHTML='';return;}
+  help.classList.add('hidden');
+  const rows = chantiers.filter(c=>norm([c.adresse,c.cp,c.client,c.poubelle,c.menage,c.gardiennage].join(' ')).includes(q)).slice(0,80);
+  if(!rows.length){results.innerHTML='<div class="help-card"><h2>Aucun résultat</h2><p>Essayez avec une partie de l’adresse ou le nom de l’agent.</p></div>';return;}
+  results.innerHTML = rows.map(c=>`<article class="chantier-card">
+    <div class="chantier-head"><div><p class="chantier-title">${html(c.adresse || 'Adresse non renseignée')}</p><div class="muted">${html(c.cp||'')}</div></div><span class="badge">${html(c.client||'Sans client')}</span></div>
+    <div class="prestations">${prestationHtml('🗑️ Poubelle',c.poubelle)}${prestationHtml('🧹 Ménage',c.menage)}${prestationHtml('👷 Gardiennage',c.gardiennage)}</div>
+    <div class="card-actions"><button class="btn secondary" data-edit="${c.id}">Modifier</button><button class="btn danger" data-delete="${c.id}">Supprimer</button></div>
+  </article>`).join('');
+}
+
+$('searchInput').addEventListener('input', render);
+$('results').addEventListener('click', async (e)=>{
+  const edit=e.target.closest('[data-edit]');
+  const del=e.target.closest('[data-delete]');
+  if(edit) openChantier(chantiers.find(c=>c.id===edit.dataset.edit));
+  if(del && confirm('Supprimer ce chantier ?')) await deleteDoc(doc(db,'chantiers',del.dataset.delete));
+});
+
+function openChantier(c=null){
+  $('chantierDialogTitle').textContent = c?'Modifier le chantier':'Ajouter un chantier';
+  $('chantierId').value=c?.id||'';
+  $('adresse').value=c?.adresse||'';
+  $('cp').value=c?.cp||'';
+  $('client').value=c?.client||'';
+  fillAgentSelects();
+  $('poubelle').value=c?.poubelle||'';
+  $('menage').value=c?.menage||'';
+  $('gardiennage').value=c?.gardiennage||'';
+  $('chantierDialog').showModal();
+}
+$('addChantierBtn').onclick=()=>openChantier();
+$('cancelChantierBtn').onclick=()=>$('chantierDialog').close();
+$('chantierForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id=$('chantierId').value;
+  const payload={adresse:clean($('adresse').value),cp:clean($('cp').value),client:clean($('client').value),poubelle:clean($('poubelle').value),menage:clean($('menage').value),gardiennage:clean($('gardiennage').value),updatedAt:serverTimestamp()};
+  if(!payload.adresse) return alert('Adresse obligatoire');
+  if(id) await updateDoc(doc(db,'chantiers',id), payload); else await addDoc(chantiersCol,{...payload,createdAt:serverTimestamp()});
+  $('chantierDialog').close();
+});
+
+$('manageAgentsBtn').onclick=()=>{$('agentsDialog').showModal();renderAgents();};
+$('closeAgentsBtn').onclick=()=>$('agentsDialog').close();
+function renderAgents(){
+  $('agentsList').innerHTML = agents.map(a=>`<div class="agent-pill"><strong>${html(a.nom)}</strong><div class="muted">${html(a.telephone||'Numéro non renseigné')}</div><div class="card-actions"><button class="btn secondary" data-agent-edit="${a.id}">Modifier</button><button class="btn danger" data-agent-delete="${a.id}">Supprimer</button></div></div>`).join('') || '<p class="muted">Aucun agent.</p>';
+}
+$('agentsList').addEventListener('click', async (e)=>{
+  const edit=e.target.closest('[data-agent-edit]');
+  const del=e.target.closest('[data-agent-delete]');
+  if(edit){const a=agents.find(x=>x.id===edit.dataset.agentEdit);$('agentId').value=a.id;$('agentName').value=a.nom||'';$('agentPhone').value=a.telephone||'';$('agentName').focus();}
+  if(del){
+    const a=agents.find(x=>x.id===del.dataset.agentDelete); if(!a) return;
+    const used=chantiers.filter(c=>[c.poubelle,c.menage,c.gardiennage].some(v=>norm(v)===norm(a.nom))).length;
+    if(!confirm(`Supprimer l'agent ${a.nom} ?${used?`\nIl est affecté à ${used} chantier(s). Les affectations seront vidées.`:''}`)) return;
+    const batch=writeBatch(db);
+    for(const c of chantiers){
+      const upd={};
+      if(norm(c.poubelle)===norm(a.nom)) upd.poubelle='';
+      if(norm(c.menage)===norm(a.nom)) upd.menage='';
+      if(norm(c.gardiennage)===norm(a.nom)) upd.gardiennage='';
+      if(Object.keys(upd).length) batch.update(doc(db,'chantiers',c.id), upd);
+    }
+    batch.delete(doc(db,'agents',a.id));
+    await batch.commit();
+  }
+});
+$('agentForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id=$('agentId').value;
+  const nom=clean($('agentName').value).toUpperCase();
+  const telephone=clean($('agentPhone').value);
+  if(!nom) return;
+  if(id) await updateDoc(doc(db,'agents',id),{nom,telephone,updatedAt:serverTimestamp()});
+  else await addDoc(agentsCol,{nom,telephone,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+  $('agentId').value='';$('agentName').value='';$('agentPhone').value='';
+});
+
+async function ensureAgent(name){
+  if(!isRealAgentName(name)) return;
+  if(agentByName(name)) return;
+  await addDoc(agentsCol,{nom:clean(name).toUpperCase(),telephone:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+}
+async function upsertChantier(row){
+  const key=chantierKey(row);
+  const existing=chantiers.find(c=>chantierKey(c)===key);
+  const payload={...row, adresse:clean(row.adresse||row.chantier), cp:clean(row.cp), client:clean(row.client), poubelle:clean(row.poubelle), menage:clean(row.menage), gardiennage:clean(row.gardiennage), updatedAt:serverTimestamp()};
+  delete payload.id; delete payload.chantier;
+  for(const n of [payload.poubelle,payload.menage,payload.gardiennage]) await ensureAgent(n);
+  if(existing) await updateDoc(doc(db,'chantiers',existing.id), payload); else await addDoc(chantiersCol,{...payload,createdAt:serverTimestamp()});
+}
+
+$('seedBtn').onclick=async()=>{
+  if(!confirm('Réimporter les adresses de départ dans Firebase ? Les chantiers existants seront mis à jour, pas doublonnés.')) return;
+  $('status').textContent='Import des adresses en cours...';
+  for(const r of initialChantiers) await upsertChantier(r);
+  $('status').textContent='Adresses réimportées.';
+};
+
+$('importBtn').onclick=()=>$('importFile').click();
+$('importFile').addEventListener('change', async (e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  let count=0;
+  for(const sheetName of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:''});
+    for(const raw of rows){
+      const mapped=mapExcelRow(raw, sheetName);
+      if(mapped.adresse){await upsertChantier(mapped); count++;}
+    }
+  }
+  alert(`${count} ligne(s) importée(s) / mise(s) à jour.`);
+  e.target.value='';
+});
+function findVal(raw, names){
+  const entries=Object.entries(raw);
+  for(const n of names){
+    const hit=entries.find(([k])=>norm(k)===norm(n) || norm(k).includes(norm(n)));
+    if(hit) return hit[1];
+  }
+  return '';
+}
+function mapExcelRow(raw, sheetName){
+  return {
+    adresse: findVal(raw,['adresse','chantier','chantiers','site','immeuble']) || Object.values(raw)[0] || '',
+    cp: findVal(raw,['cp','code postal','ville','cp / ville']),
+    client: findVal(raw,['client']) || sheetName,
+    poubelle: findVal(raw,['poubelle','poubelles']),
+    menage: findVal(raw,['menage','ménage']),
+    gardiennage: findVal(raw,['gardiennage','gardien'])
+  };
+}
+$('exportBtn').onclick=()=>{
+  const lines=[['Client','Adresse','CP / Ville','Poubelle','Menage','Gardiennage'],...chantiers.map(c=>[c.client,c.adresse,c.cp,c.poubelle,c.menage,c.gardiennage])];
+  const csv=lines.map(l=>l.map(v=>`"${String(v||'').replaceAll('"','""')}"`).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='kalnet_chantiers.csv'; a.click(); URL.revokeObjectURL(url);
+};
+
+
+============================== README.md ==============================
+# KAL NET - Version refaite complète
+
+## Fichiers à mettre à la racine GitHub
+
+- index.html
+- style.css
+- app.js
+- firebase.js
+- initialData.js
+
+## Firebase
+
+Dans Firestore > Règles, pour les tests :
+
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+## Utilisation
+
+1. Remplacer les anciens fichiers GitHub par ces fichiers.
+2. Ouvrir GitHub Pages.
+3. Cliquer sur **Réparer / réimporter les adresses** pour charger les adresses dans Firebase.
+4. Ajouter les numéros des agents dans **Agents**.
+5. Chercher une adresse, un client ou un agent.
+
+Les résultats apparaissent uniquement après une recherche. Les numéros des agents sont cliquables pour appeler directement.

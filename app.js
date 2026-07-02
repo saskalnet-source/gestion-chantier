@@ -1,180 +1,189 @@
-import { initialChantiers, initialAgents } from './initialData.js';
-import {
-  db, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, writeBatch, serverTimestamp
-} from './firebase.js';
+import { db, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, writeBatch, onSnapshot, serverTimestamp } from './firebase.js';
+import { initialChantiers } from './initialData.js';
 
 const $ = (id) => document.getElementById(id);
-const refs = {
-  agents: collection(db, 'agents'),
-  chantiers: collection(db, 'chantiers')
-};
-let agents = [];
+const chantiersCol = collection(db, 'chantiers');
+const agentsCol = collection(db, 'agents');
 let chantiers = [];
-let readyAgents = false;
+let agents = [];
 let readyChantiers = false;
+let readyAgents = false;
+const SERVICE_WORDS = new Set(['poubelle','poubelles','menage','ménage','gardiennage','gardien','agent','']);
 
-const PRESTATION_LABELS = ['poubelle','menage','ménage','gardiennage','gardien','agent','agents','prestation','prestations'];
-function norm(v){return (v||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
-function clean(v){return (v||'').toString().trim();}
-function agentKey(v){return norm(v).replace(/\s+/g,' ');}
-function escapeHtml(s){return (s||'').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
-function isHeaderValue(v){return PRESTATION_LABELS.includes(norm(v)) || ['adresse','adresses','chantier','chantiers','cp','ville','client','nom du client'].includes(norm(v));}
-function addressOf(c){return clean(c.adresse || c.Adresse || c.ADRESSE || c.chantier || c.Chantier || c.CHANTIER || c['Adresse du chantier'] || c['adresse du chantier'] || c.adress || c.address || c.nom || '');}
-function villeOf(c){return clean(c.ville || c.Ville || c.VILLE || c.cp || c.CP || c.codePostal || c.code_postal || '');}
-function clientOf(c){return clean(c.client || c.Client || c.CLIENT || c.source || c.Source || '');}
-function prestationOf(c,k){return isHeaderValue(c[k]) ? '' : clean(c[k]);}
-function agentByName(name){const k=agentKey(name);return agents.find(a=>agentKey(a.nom)===k);}
-function chantierAgents(c){return ['poubelle','menage','gardiennage'].map(k=>prestationOf(c,k)).filter(Boolean);}
-function unique(arr){return [...new Set(arr.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'))}
-function phoneLink(agentName){
-  if(!agentName) return '<span class="empty">Aucun agent</span>';
-  const ag = agentByName(agentName);
-  const phone = ag?.telephone || '';
-  if(!phone) return `<span class="agent">${escapeHtml(agentName)}<br><span class="empty">Téléphone non renseigné</span></span>`;
-  const href = phone.replace(/\s+/g,'');
-  return `<span class="agent">${escapeHtml(agentName)}<br><a href="tel:${escapeHtml(href)}">📞 ${escapeHtml(phone)}</a></span>`;
+function norm(v){return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim()}
+function clean(v){return String(v||'').trim()}
+function html(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function phoneHref(p){return String(p||'').replace(/[^0-9+]/g,'')}
+function agentByName(name){const n=norm(name);return agents.find(a=>norm(a.nom)===n)}
+function isRealAgentName(name){const n=norm(name); return n && !SERVICE_WORDS.has(n) && n.length > 1}
+function chantierKey(c){return norm((c.client||'')+'|'+(c.adresse||c.chantier||''))}
+function setStatus(){
+  const total = chantiers.length;
+  $('status').textContent = (readyChantiers && readyAgents) ? `${total} chantier(s) - ${agents.length} agent(s) synchronisés Firebase` : 'Chargement Firebase...';
 }
-function selectOptions(selected=''){
-  return '<option value="">Aucun</option>' + agents.map(a=>`<option value="${escapeHtml(a.nom)}" ${a.nom===selected?'selected':''}>${escapeHtml(a.nom)}</option>`).join('');
+
+onSnapshot(agentsCol, (snap)=>{agents=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.nom||'').localeCompare(String(b.nom||''),'fr'));readyAgents=true;fillAgentSelects();renderAgents();render();setStatus();}, err=>{$('status').textContent='Erreur Firebase agents : '+err.message});
+onSnapshot(chantiersCol, (snap)=>{chantiers=snap.docs.map(d=>({id:d.id,...d.data()}));readyChantiers=true;render();setStatus();}, err=>{$('status').textContent='Erreur Firebase chantiers : '+err.message});
+
+function agentOptions(selected=''){
+  const opts = ['<option value="">-- Aucun --</option>'];
+  for(const a of agents){
+    const nom = a.nom || '';
+    opts.push(`<option value="${html(nom)}" ${norm(nom)===norm(selected)?'selected':''}>${html(nom)}</option>`);
+  }
+  return opts.join('');
 }
-function filteredChantiers(){
-  const q=norm($('search').value); const fa=$('agentFilter').value; const fc=$('clientFilter').value;
-  return chantiers.filter(c=>{
-    const phones=chantierAgents(c).map(a=>agentByName(a)?.telephone||'').join(' ');
-    const blob=norm([addressOf(c), villeOf(c), clientOf(c), ...chantierAgents(c), phones].join(' '));
-    if(q && !blob.includes(q)) return false;
-    if(fa && !chantierAgents(c).includes(fa)) return false;
-    if(fc && clientOf(c)!==fc) return false;
-    return true;
-  });
+function fillAgentSelects(){
+  for(const id of ['poubelle','menage','gardiennage']){
+    const current=$(id).value;
+    $(id).innerHTML=agentOptions(current);
+  }
 }
-function renderFilters(){
-  const currentA=$('agentFilter').value, currentC=$('clientFilter').value;
-  $('agentFilter').innerHTML='<option value="">Tous</option>'+agents.map(a=>`<option ${a.nom===currentA?'selected':''}>${escapeHtml(a.nom)}</option>`).join('');
-  const clients=unique(chantiers.map(clientOf));
-  $('clientFilter').innerHTML='<option value="">Tous</option>'+clients.map(c=>`<option ${c===currentC?'selected':''}>${escapeHtml(c)}</option>`).join('');
+function prestationHtml(label, agentName){
+  if(!agentName) return `<div class="presta"><h3>${label}</h3><span class="no-phone">Aucun agent</span></div>`;
+  const a = agentByName(agentName);
+  const phone = a?.telephone || '';
+  return `<div class="presta"><h3>${label}</h3><div class="agent-name">${html(agentName)}</div>${phone?`<a class="call" href="tel:${phoneHref(phone)}">📞 ${html(phone)}</a>`:'<div class="no-phone">Numéro non renseigné</div>'}</div>`;
 }
-function renderAgentSelects(){['poubelle','menage','gardiennage'].forEach(id=>$(id).innerHTML=selectOptions($(id).value));}
+function render(){
+  const q = norm($('searchInput').value);
+  const help=$('emptyHelp'), results=$('results');
+  if(q.length < 2){help.classList.remove('hidden');results.innerHTML='';return;}
+  help.classList.add('hidden');
+  const rows = chantiers.filter(c=>norm([c.adresse,c.cp,c.client,c.poubelle,c.menage,c.gardiennage].join(' ')).includes(q)).slice(0,80);
+  if(!rows.length){results.innerHTML='<div class="help-card"><h2>Aucun résultat</h2><p>Essayez avec une partie de l’adresse ou le nom de l’agent.</p></div>';return;}
+  results.innerHTML = rows.map(c=>`<article class="chantier-card">
+    <div class="chantier-head"><div><p class="chantier-title">${html(c.adresse || 'Adresse non renseignée')}</p><div class="muted">${html(c.cp||'')}</div></div><span class="badge">${html(c.client||'Sans client')}</span></div>
+    <div class="prestations">${prestationHtml('🗑️ Poubelle',c.poubelle)}${prestationHtml('🧹 Ménage',c.menage)}${prestationHtml('👷 Gardiennage',c.gardiennage)}</div>
+    <div class="card-actions"><button class="btn secondary" data-edit="${c.id}">Modifier</button><button class="btn danger" data-delete="${c.id}">Supprimer</button></div>
+  </article>`).join('');
+}
+
+$('searchInput').addEventListener('input', render);
+$('results').addEventListener('click', async (e)=>{
+  const edit=e.target.closest('[data-edit]');
+  const del=e.target.closest('[data-delete]');
+  if(edit) openChantier(chantiers.find(c=>c.id===edit.dataset.edit));
+  if(del && confirm('Supprimer ce chantier ?')) await deleteDoc(doc(db,'chantiers',del.dataset.delete));
+});
+
+function openChantier(c=null){
+  $('chantierDialogTitle').textContent = c?'Modifier le chantier':'Ajouter un chantier';
+  $('chantierId').value=c?.id||'';
+  $('adresse').value=c?.adresse||'';
+  $('cp').value=c?.cp||'';
+  $('client').value=c?.client||'';
+  fillAgentSelects();
+  $('poubelle').value=c?.poubelle||'';
+  $('menage').value=c?.menage||'';
+  $('gardiennage').value=c?.gardiennage||'';
+  $('chantierDialog').showModal();
+}
+$('addChantierBtn').onclick=()=>openChantier();
+$('cancelChantierBtn').onclick=()=>$('chantierDialog').close();
+$('chantierForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id=$('chantierId').value;
+  const payload={adresse:clean($('adresse').value),cp:clean($('cp').value),client:clean($('client').value),poubelle:clean($('poubelle').value),menage:clean($('menage').value),gardiennage:clean($('gardiennage').value),updatedAt:serverTimestamp()};
+  if(!payload.adresse) return alert('Adresse obligatoire');
+  if(id) await updateDoc(doc(db,'chantiers',id), payload); else await addDoc(chantiersCol,{...payload,createdAt:serverTimestamp()});
+  $('chantierDialog').close();
+});
+
+$('manageAgentsBtn').onclick=()=>{$('agentsDialog').showModal();renderAgents();};
+$('closeAgentsBtn').onclick=()=>$('agentsDialog').close();
 function renderAgents(){
-  $('kAgents').textContent=agents.length;
-  $('agentList').innerHTML=agents.map(a=>`
-    <div class="agent-card">
-      <strong>${escapeHtml(a.nom)}</strong>
-      <div class="phone">${a.telephone ? '📞 '+escapeHtml(a.telephone) : '<span class="empty">Téléphone non renseigné</span>'}</div>
-      <div class="mini-actions"><button class="secondary" data-edit-agent="${a.id}">Modifier</button><button class="danger" data-delete-agent="${a.id}">Supprimer</button></div>
-    </div>`).join('') || '<p class="empty">Aucun agent.</p>';
+  $('agentsList').innerHTML = agents.map(a=>`<div class="agent-pill"><strong>${html(a.nom)}</strong><div class="muted">${html(a.telephone||'Numéro non renseigné')}</div><div class="card-actions"><button class="btn secondary" data-agent-edit="${a.id}">Modifier</button><button class="btn danger" data-agent-delete="${a.id}">Supprimer</button></div></div>`).join('') || '<p class="muted">Aucun agent.</p>';
 }
-function renderChantiers(){
-  const rows=filteredChantiers();
-  $('kChantiers').textContent=chantiers.length; $('kVisible').textContent=rows.length;
-  $('chantierList').innerHTML=rows.map(c=>{
-    const adresse=addressOf(c) || 'Adresse non renseignée';
-    return `<article class="chantier-card">
-      <h3>📍 ${escapeHtml(adresse)}</h3>
-      <div class="meta">${escapeHtml(villeOf(c))} ${clientOf(c)?`<span class="client">${escapeHtml(clientOf(c))}</span>`:''}</div>
-      <div class="prestations">
-        <div class="presta"><b>🗑️ Poubelle</b><br>${phoneLink(prestationOf(c,'poubelle'))}</div>
-        <div class="presta"><b>🧹 Ménage</b><br>${phoneLink(prestationOf(c,'menage'))}</div>
-        <div class="presta"><b>👷 Gardiennage</b><br>${phoneLink(prestationOf(c,'gardiennage'))}</div>
-      </div>
-      <div class="mini-actions"><button class="secondary" data-edit-chantier="${c.id}">Modifier</button><button class="danger" data-delete-chantier="${c.id}">Supprimer</button></div>
-    </article>`;
-  }).join('') || '<p class="empty">Aucun chantier trouvé.</p>';
-}
-function render(){renderFilters();renderAgentSelects();renderAgents();renderChantiers();}
-
-
-async function resetChantiersAvecAdressesInitiales(){
-  if(!confirm('Cette action va remplacer la liste des chantiers dans Firebase par la liste initiale avec les vraies adresses. Continuer ?')) return;
-  const snap = await getDocs(refs.chantiers);
-  let batch = writeBatch(db);
-  let count = 0;
-  snap.docs.forEach(d=>{ batch.delete(doc(refs.chantiers,d.id)); count++; if(count%400===0){ /* limite batch Firebase */ } });
-  // Si beaucoup de docs, on fait simple par paquets
-  if(count > 0) await batch.commit();
-  batch = writeBatch(db);
-  initialChantiers.forEach((c,i)=>{
-    batch.set(doc(refs.chantiers, String(c.id || i+1)), {
-      adresse: addressOf(c),
-      ville: villeOf(c),
-      client: clientOf(c),
-      poubelle: prestationOf(c,'poubelle'),
-      menage: prestationOf(c,'menage'),
-      gardiennage: prestationOf(c,'gardiennage'),
-      createdAt: serverTimestamp()
-    });
-  });
-  await batch.commit();
-  toast('Adresses des chantiers réimportées');
-}
-
-async function seedIfEmpty(){
-  const [agSnap,chSnap]=await Promise.all([getDocs(refs.agents),getDocs(refs.chantiers)]);
-  if(!agSnap.empty || !chSnap.empty) return;
-  const batch=writeBatch(db);
-  initialAgents.forEach(a=>batch.set(doc(refs.agents), {nom:a.nom, telephone:a.telephone||'', createdAt:serverTimestamp()}));
-  initialChantiers.forEach((c,i)=>batch.set(doc(refs.chantiers, String(c.id || i+1)), {adresse:addressOf(c), ville:villeOf(c), client:clientOf(c), poubelle:prestationOf(c,'poubelle'), menage:prestationOf(c,'menage'), gardiennage:prestationOf(c,'gardiennage'), createdAt:serverTimestamp()}));
-  await batch.commit(); toast('Adresses initiales importées');
-}
-
-onSnapshot(refs.agents, snap=>{agents=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.nom||'').localeCompare(b.nom||'','fr')); readyAgents=true; if(readyChantiers)$('syncStatus').textContent='Synchronisé avec Firebase'; render();}, err=>{console.error(err);$('syncStatus').textContent='Erreur Firebase agents';});
-onSnapshot(refs.chantiers, snap=>{chantiers=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>addressOf(a).localeCompare(addressOf(b),'fr')); readyChantiers=true; if(readyAgents)$('syncStatus').textContent='Synchronisé avec Firebase'; render();}, err=>{console.error(err);$('syncStatus').textContent='Erreur Firebase chantiers';});
-seedIfEmpty().catch(e=>{console.error(e);$('syncStatus').textContent='Erreur import initial';});
-
-$('agentForm').addEventListener('submit', async e=>{
-  e.preventDefault(); const id=$('agentId').value; const nom=clean($('agentName').value).toUpperCase(); const telephone=clean($('agentPhone').value);
-  if(!nom) return; const existing=agents.find(a=>agentKey(a.nom)===agentKey(nom)&&a.id!==id); if(existing) return alert('Cet agent existe déjà.');
-  if(id) await updateDoc(doc(refs.agents,id), {nom, telephone, updatedAt:serverTimestamp()}); else await addDoc(refs.agents,{nom,telephone,createdAt:serverTimestamp()});
-  $('agentForm').reset(); $('agentId').value=''; toast('Agent enregistré');
+$('agentsList').addEventListener('click', async (e)=>{
+  const edit=e.target.closest('[data-agent-edit]');
+  const del=e.target.closest('[data-agent-delete]');
+  if(edit){const a=agents.find(x=>x.id===edit.dataset.agentEdit);$('agentId').value=a.id;$('agentName').value=a.nom||'';$('agentPhone').value=a.telephone||'';$('agentName').focus();}
+  if(del){
+    const a=agents.find(x=>x.id===del.dataset.agentDelete); if(!a) return;
+    const used=chantiers.filter(c=>[c.poubelle,c.menage,c.gardiennage].some(v=>norm(v)===norm(a.nom))).length;
+    if(!confirm(`Supprimer l'agent ${a.nom} ?${used?`\nIl est affecté à ${used} chantier(s). Les affectations seront vidées.`:''}`)) return;
+    const batch=writeBatch(db);
+    for(const c of chantiers){
+      const upd={};
+      if(norm(c.poubelle)===norm(a.nom)) upd.poubelle='';
+      if(norm(c.menage)===norm(a.nom)) upd.menage='';
+      if(norm(c.gardiennage)===norm(a.nom)) upd.gardiennage='';
+      if(Object.keys(upd).length) batch.update(doc(db,'chantiers',c.id), upd);
+    }
+    batch.delete(doc(db,'agents',a.id));
+    await batch.commit();
+  }
 });
-$('clearAgentBtn').onclick=()=>{$('agentForm').reset();$('agentId').value='';};
-$('agentList').addEventListener('click', async e=>{
-  const edit=e.target.dataset.editAgent, del=e.target.dataset.deleteAgent;
-  if(edit){const a=agents.find(x=>x.id===edit); if(!a)return; $('agentId').value=a.id; $('agentName').value=a.nom||''; $('agentPhone').value=a.telephone||''; $('agentName').focus();}
-  if(del){const a=agents.find(x=>x.id===del); if(!a)return; const used=chantiers.filter(c=>chantierAgents(c).some(n=>agentKey(n)===agentKey(a.nom))).length; if(!confirm(used?`Cet agent est affecté à ${used} chantier(s). Supprimer et retirer ses affectations ?`:'Supprimer cet agent ?'))return; const batch=writeBatch(db); chantiers.forEach(c=>{const patch={}; ['poubelle','menage','gardiennage'].forEach(k=>{if(agentKey(c[k])===agentKey(a.nom))patch[k]='';}); if(Object.keys(patch).length) batch.update(doc(refs.chantiers,c.id),patch);}); batch.delete(doc(refs.agents,del)); await batch.commit(); toast('Agent supprimé');}
+$('agentForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const id=$('agentId').value;
+  const nom=clean($('agentName').value).toUpperCase();
+  const telephone=clean($('agentPhone').value);
+  if(!nom) return;
+  if(id) await updateDoc(doc(db,'agents',id),{nom,telephone,updatedAt:serverTimestamp()});
+  else await addDoc(agentsCol,{nom,telephone,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+  $('agentId').value='';$('agentName').value='';$('agentPhone').value='';
 });
-function openChantier(c=null){$('chantierId').value=c?.id||''; $('dialogTitle').textContent=c?'Modifier le chantier':'Ajouter un chantier'; $('adresse').value=c?addressOf(c):''; $('ville').value=c?villeOf(c):''; $('client').value=c?clientOf(c):''; renderAgentSelects(); $('poubelle').value=c?prestationOf(c,'poubelle'):''; $('menage').value=c?prestationOf(c,'menage'):''; $('gardiennage').value=c?prestationOf(c,'gardiennage'):''; $('chantierDialog').showModal();}
-$('newChantierBtn').onclick=()=>openChantier(); $('cancelChantierBtn').onclick=()=>$('chantierDialog').close();
-$('chantierForm').addEventListener('submit', async e=>{e.preventDefault(); const id=$('chantierId').value; const row={adresse:clean($('adresse').value), ville:clean($('ville').value), client:clean($('client').value), poubelle:$('poubelle').value, menage:$('menage').value, gardiennage:$('gardiennage').value, updatedAt:serverTimestamp()}; if(!row.adresse)return alert('Adresse obligatoire'); if(id)await updateDoc(doc(refs.chantiers,id),row); else await addDoc(refs.chantiers,{...row,createdAt:serverTimestamp()}); $('chantierDialog').close(); toast('Chantier enregistré');});
-$('chantierList').addEventListener('click', async e=>{const edit=e.target.dataset.editChantier, del=e.target.dataset.deleteChantier; if(edit){const c=chantiers.find(x=>x.id===edit); if(c)openChantier(c);} if(del&&confirm('Supprimer ce chantier ?')){await deleteDoc(doc(refs.chantiers,del)); toast('Chantier supprimé');}});
-['search','agentFilter','clientFilter'].forEach(id=>$(id).addEventListener('input', render));
+
+async function ensureAgent(name){
+  if(!isRealAgentName(name)) return;
+  if(agentByName(name)) return;
+  await addDoc(agentsCol,{nom:clean(name).toUpperCase(),telephone:'',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+}
+async function upsertChantier(row){
+  const key=chantierKey(row);
+  const existing=chantiers.find(c=>chantierKey(c)===key);
+  const payload={...row, adresse:clean(row.adresse||row.chantier), cp:clean(row.cp), client:clean(row.client), poubelle:clean(row.poubelle), menage:clean(row.menage), gardiennage:clean(row.gardiennage), updatedAt:serverTimestamp()};
+  delete payload.id; delete payload.chantier;
+  for(const n of [payload.poubelle,payload.menage,payload.gardiennage]) await ensureAgent(n);
+  if(existing) await updateDoc(doc(db,'chantiers',existing.id), payload); else await addDoc(chantiersCol,{...payload,createdAt:serverTimestamp()});
+}
+
+$('seedBtn').onclick=async()=>{
+  if(!confirm('Réimporter les adresses de départ dans Firebase ? Les chantiers existants seront mis à jour, pas doublonnés.')) return;
+  $('status').textContent='Import des adresses en cours...';
+  for(const r of initialChantiers) await upsertChantier(r);
+  $('status').textContent='Adresses réimportées.';
+};
 
 $('importBtn').onclick=()=>$('importFile').click();
-$('importFile').addEventListener('change', async e=>{
-  const file=e.target.files[0]; if(!file)return; const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'}); const imported=[]; const foundAgents=new Set();
-  wb.SheetNames.forEach(sheetName=>{const ws=wb.Sheets[sheetName]; const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}); let headerIndex=rows.findIndex(r=>r.some(v=>['adresse','adresses','chantier','chantiers'].includes(norm(v)))); if(headerIndex<0) headerIndex=0; const headers=rows[headerIndex].map(norm); const find=(names)=>headers.findIndex(h=>names.some(n=>h.includes(n))); let cAdresse=find(['adresse','chantier']); if(cAdresse<0) cAdresse=0; const cVille=find(['cp','ville']); const cPoub=find(['poubelle']); const cMen=find(['menage','ménage']); const cGard=find(['gardien']); const cClient=find(['client']); rows.slice(headerIndex+1).forEach(r=>{const val=i=>i>=0?clean(r[i]):''; const adresse=val(cAdresse); if(!adresse || isHeaderValue(adresse))return; const item={adresse, ville:val(cVille), client:val(cClient)||sheetName, poubelle:val(cPoub), menage:val(cMen), gardiennage:val(cGard)}; ['poubelle','menage','gardiennage'].forEach(k=>{if(item[k] && !isHeaderValue(item[k])) foundAgents.add(item[k].toUpperCase()); else if(isHeaderValue(item[k])) item[k]='';}); imported.push(item);});});
-  if(!imported.length) return alert('Aucun chantier trouvé dans ce fichier. Vérifiez la colonne Adresse.');
-  if(!confirm(`Importer ${imported.length} chantier(s) ?`)) return;
-  const batch=writeBatch(db); const existingKeys=new Map(chantiers.map(c=>[norm(clientOf(c)+'|'+addressOf(c)),c]));
-  imported.forEach(item=>{const key=norm(item.client+'|'+item.adresse); const ex=existingKeys.get(key); if(ex) batch.update(doc(refs.chantiers,ex.id), {...item,updatedAt:serverTimestamp()}); else batch.set(doc(refs.chantiers), {...item,createdAt:serverTimestamp()});});
-  foundAgents.forEach(n=>{if(!agents.some(a=>agentKey(a.nom)===agentKey(n))) batch.set(doc(refs.agents), {nom:n, telephone:'', createdAt:serverTimestamp()});});
-  await batch.commit(); e.target.value=''; toast('Import terminé');
+$('importFile').addEventListener('change', async (e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  let count=0;
+  for(const sheetName of wb.SheetNames){
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:''});
+    for(const raw of rows){
+      const mapped=mapExcelRow(raw, sheetName);
+      if(mapped.adresse){await upsertChantier(mapped); count++;}
+    }
+  }
+  alert(`${count} ligne(s) importée(s) / mise(s) à jour.`);
+  e.target.value='';
 });
-$('resetChantiersBtn').onclick=()=>resetChantiersAvecAdressesInitiales().catch(e=>{console.error(e); alert('Erreur réimport adresses : '+e.message);});
-
-$('exportBtn').onclick=()=>{const rows=[['Client','Adresse','Ville','Poubelle','Ménage','Gardiennage'],...chantiers.map(c=>[clientOf(c),addressOf(c),villeOf(c),prestationOf(c,'poubelle'),prestationOf(c,'menage'),prestationOf(c,'gardiennage')])]; const csv=rows.map(r=>r.map(v=>`"${String(v||'').replaceAll('"','""')}"`).join(';')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='kalnet_chantiers.csv'; a.click(); URL.revokeObjectURL(url);};
-
-
-async function resetInitialAdresses(){
-  if(!confirm('Cette action va remplacer la liste actuelle des chantiers par les adresses initiales. Les agents et téléphones seront conservés. Continuer ?')) return;
-  $('syncStatus').textContent='Réimport des adresses en cours...';
-  const current = await getDocs(refs.chantiers);
-  let batch = writeBatch(db);
-  let count = 0;
-  current.docs.forEach(d=>{ batch.delete(doc(refs.chantiers,d.id)); count++; if(count>=450){ /* Firestore max 500 writes, but not reached here normalement */ } });
-  await batch.commit();
-  const batch2 = writeBatch(db);
-  const newAgents = new Set();
-  initialChantiers.forEach(c=>{
-    const row = {adresse:addressOf(c), ville:villeOf(c), client:clientOf(c), poubelle:prestationOf(c,'poubelle'), menage:prestationOf(c,'menage'), gardiennage:prestationOf(c,'gardiennage'), createdAt:serverTimestamp()};
-    ['poubelle','menage','gardiennage'].forEach(k=>{ if(row[k]) newAgents.add(row[k].toUpperCase()); });
-    batch2.set(doc(refs.chantiers, 'initial_'+(c.id||Math.random().toString(36).slice(2))), row);
-  });
-  newAgents.forEach(n=>{ if(!agents.some(a=>agentKey(a.nom)===agentKey(n))) batch2.set(doc(refs.agents), {nom:n, telephone:'', createdAt:serverTimestamp()}); });
-  await batch2.commit();
-  toast('Adresses réimportées');
+function findVal(raw, names){
+  const entries=Object.entries(raw);
+  for(const n of names){
+    const hit=entries.find(([k])=>norm(k)===norm(n) || norm(k).includes(norm(n)));
+    if(hit) return hit[1];
+  }
+  return '';
 }
-const resetBtn = $('resetInitialBtn');
-if(resetBtn) resetBtn.onclick = resetInitialAdresses;
+function mapExcelRow(raw, sheetName){
+  return {
+    adresse: findVal(raw,['adresse','chantier','chantiers','site','immeuble']) || Object.values(raw)[0] || '',
+    cp: findVal(raw,['cp','code postal','ville','cp / ville']),
+    client: findVal(raw,['client']) || sheetName,
+    poubelle: findVal(raw,['poubelle','poubelles']),
+    menage: findVal(raw,['menage','ménage']),
+    gardiennage: findVal(raw,['gardiennage','gardien'])
+  };
+}
+$('exportBtn').onclick=()=>{
+  const lines=[['Client','Adresse','CP / Ville','Poubelle','Menage','Gardiennage'],...chantiers.map(c=>[c.client,c.adresse,c.cp,c.poubelle,c.menage,c.gardiennage])];
+  const csv=lines.map(l=>l.map(v=>`"${String(v||'').replaceAll('"','""')}"`).join(';')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='kalnet_chantiers.csv'; a.click(); URL.revokeObjectURL(url);
+};
